@@ -534,6 +534,7 @@ body{background:var(--bg);color:var(--text);font-family:'Manrope',sans-serif;fon
         <th onclick="sortA('cost_d3_tag')">D3</th>
         <th onclick="sortA('cost_d7_tag')">D7</th>
         <th onclick="sortA('roas_tag')">ROAS</th>
+        <th onclick="sortA('conv_val')">Conv %</th>
         <th onclick="sortA('hook_rate')">Hook %</th>
         <th onclick="sortA('hold_rate')">Hold %</th>
         <th onclick="sortA('total_spend')">Spend</th>
@@ -1069,11 +1070,12 @@ function renderAll(){
     <td>${tagH(c.cost_d3_tag)}</td>
     <td>${tagH(c.cost_d7_tag)}</td>
     <td>${tagH(c.roas_tag)}</td>
+    <td class="nr" style="color:var(--text)">${!c.conv_elig?'N/A':c.conv_val!=null?c.conv_val.toFixed(1)+'%':'—'}</td>
     <td class="nr" style="color:var(--text)">${c.hook_rate!=null?c.hook_rate.toFixed(1)+'%':'—'}</td>
     <td class="nr" style="color:var(--text)">${c.hold_rate!=null?c.hold_rate.toFixed(1)+'%':'—'}</td>
     <td class="nr">${spendH(c.total_spend)}</td>
     <td style="text-align:center">${noteBtn(c.key)}</td>
-  </tr>`).join('')||`<tr><td colspan="16" class="empty">No creatives match</td></tr>`;
+  </tr>`).join('')||`<tr><td colspan="17" class="empty">No creatives match</td></tr>`;
   pag('allPag',s,pages,renderAll);
 }
 function sortA(col){if(allS.sort===col)allS.dir*=-1;else{allS.sort=col;allS.dir=-1;}allS.p=1;renderAll();}
@@ -2625,6 +2627,7 @@ function processCSV(text) {
     const utmId = (cols[idx['utm_creative_id']] || '').trim();
     const spend = cleanNum(cols[idx['daily_spend']]);
     const leads = cleanNum(cols[idx['daily_leads']]);
+    const paidLeads = 'daily_paid_leads' in idx ? cleanNum(cols[idx['daily_paid_leads']]) : 0;
     const revenue = cleanNum(cols[idx['daily_revenue_ex_tax']]);
     const d3 = cleanNum(cols[idx['daily_attended_3_plus']]);
     const d7 = cleanNum(cols[idx['daily_attended_7_plus']]);
@@ -2648,9 +2651,10 @@ function processCSV(text) {
     if (spend > 0 && (!c.goLive || actDate < c.goLive)) c.goLive = actDate;
 
     const dk = fmtDate(actDate);
-    if (!c.days[dk]) c.days[dk] = {spend:0,leads:0,revenue:0,d3:0,d7:0,impressions:0,plays3s:0,thru:0};
+    if (!c.days[dk]) c.days[dk] = {spend:0,leads:0,paid:0,revenue:0,d3:0,d7:0,impressions:0,plays3s:0,thru:0};
     c.days[dk].spend += spend;
     c.days[dk].leads += leads;
+    c.days[dk].paid += paidLeads;
     c.days[dk].revenue += revenue;
     c.days[dk].d3 += d3;
     c.days[dk].d7 += d7;
@@ -2773,6 +2777,21 @@ function processCSV(text) {
         roas_val = Math.round(rr/rs*100)/100;
         roas_tag = roas_val >= getThr().roasGreen ? 'Green' : roas_val > getThr().roasYellow ? 'Yellow' : 'Red';
       }
+    }
+
+    // Conversion % — paid_leads / leads, using the SAME window & eligibility as ROAS
+    // (Not Eligible under 28d; first 7 / 14 / 21 days from go-live for age 28-34 / 35-41 / 42+)
+    const convWin = age < 28 ? null : age <= 34 ? 7 : age <= 41 ? 14 : 21;
+    const conv_elig = convWin != null;
+    let conv_val = null;
+    if (convWin) {
+      const cutoff = new Date(goLive); cutoff.setDate(cutoff.getDate()+convWin-1);
+      let pl=0, fl=0;
+      for (const [dk,v] of Object.entries(c.days)) {
+        const d = new Date(dk);
+        if (d < today && d <= cutoff) { pl += (v.paid||0); fl += v.leads; }
+      }
+      conv_val = fl > 0 ? Math.round(pl/fl*1000)/10 : null; // % with 1 decimal
     }
 
     const confidence = total_spend < 5000 ? 'Low' : total_spend < 20000 ? 'Medium' : 'High';
@@ -2915,7 +2934,7 @@ function processCSV(text) {
     creatives.push({
       key, ad_name: c.adName, go_live: fmtDate(goLive), age, theme, dh_phase,
       paused_from, cpl_val, cpl_tag, cost_d3_val, cost_d3_tag,
-      cost_d7_val, cost_d7_tag, roas_val, roas_tag, hook_rate, hold_rate,
+      cost_d7_val, cost_d7_tag, roas_val, roas_tag, conv_val, conv_elig, hook_rate, hold_rate,
       sc_cpl_val, sc_cpl_tag, sc_d3_val, sc_d3_tag, sc_d7_val, sc_d7_tag, sc_roas_val, sc_roas_tag,
       sc_health_score,
       total_spend, total_leads, active_days, is_ai, health_score, confidence, action,
