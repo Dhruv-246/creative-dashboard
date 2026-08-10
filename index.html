@@ -1070,7 +1070,7 @@ function renderAll(){
     <td>${tagH(c.cost_d3_tag)}</td>
     <td>${tagH(c.cost_d7_tag)}</td>
     <td>${tagH(c.roas_tag)}</td>
-    <td class="nr" style="color:var(--text)">${!c.conv_elig?'N/A':c.conv_val!=null?c.conv_val.toFixed(1)+'%':'—'}</td>
+    <td class="nr" style="color:var(--text)">${!c.conv_elig?'':c.conv_val!=null?c.conv_val.toFixed(1)+'%':'—'}</td>
     <td class="nr" style="color:var(--text)">${c.hook_rate!=null?c.hook_rate.toFixed(1)+'%':'—'}</td>
     <td class="nr" style="color:var(--text)">${c.hold_rate!=null?c.hold_rate.toFixed(1)+'%':'—'}</td>
     <td class="nr">${spendH(c.total_spend)}</td>
