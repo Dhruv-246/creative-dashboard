@@ -718,6 +718,7 @@ body{background:var(--bg);color:var(--text);font-family:'Manrope',sans-serif;fon
       <th onclick="sortSc('theme')">Theme</th>
       <th onclick="sortSc('active_days')" class="srt">Active Days</th>
       <th>Days Past 28</th>
+      <th onclick="sortSc('conv_life_val')">Conv %</th>
       <th onclick="sortSc('sc_cpl_val')">CPL ₹</th><th>CPL Tag</th>
       <th onclick="sortSc('sc_d3_val')">D3 ₹</th><th>D3 Tag</th>
       <th onclick="sortSc('sc_d7_val')">D7 ₹</th><th>D7 Tag</th>
@@ -1491,6 +1492,7 @@ function renderScaled(){
     <td>${themeH(c.theme,c.theme==='Date Hook')}</td>
     <td style="font-family:'IBM Plex Mono'">${c.active_days}d <span style="color:var(--text3);font-size:10px">(${c.age}d cal)</span></td>
     <td style="font-family:'IBM Plex Mono';color:var(--blue)">${c.active_days-28}d</td>
+    <td class="nr" style="color:var(--text)">${c.conv_life_val!=null?c.conv_life_val.toFixed(1)+'%':'—'}</td>
     <td class="nr" style="color:var(--text);font-weight:600">${c.sc_cpl_val!=null?'₹'+c.sc_cpl_val:'—'}</td>
     <td>${tagH(c.sc_cpl_tag)}</td>
     <td class="nr">${c.sc_d3_val!=null?'₹'+c.sc_d3_val:'—'}</td>
@@ -1503,7 +1505,7 @@ function renderScaled(){
     <td class="nr">${spendH(c.total_spend)}</td>
     <td class="nr">${c.total_leads.toLocaleString('en-IN')}</td>
     <td style="text-align:center">${noteBtn(c.key)}</td>
-  </tr>`).join('')||`<tr><td colspan="17" class="empty">No creatives with age &gt; 28 days</td></tr>`;
+  </tr>`).join('')||`<tr><td colspan="18" class="empty">No creatives with age &gt; 28 days</td></tr>`;
   pag('scPag',s,pages,renderScaled);
 }
 function sortSc(col){if(scS.sort===col)scS.dir*=-1;else{scS.sort=col;scS.dir=-1;}scS.p=1;renderScaled();}
@@ -2925,19 +2927,22 @@ function processCSV(text) {
     }
 
     // ── Lifetime cumulative Hook / Hold (impression-weighted, NOT a simple average) ──
-    let lifeImp = 0, lifePlays = 0, lifeThru = 0;
+    let lifeImp = 0, lifePlays = 0, lifeThru = 0, lifePaid = 0;
     for (const v of Object.values(c.days)) {
       lifeImp   += v.impressions || 0;
       lifePlays += v.plays3s || 0;
       lifeThru  += v.thru || 0;
+      lifePaid  += v.paid || 0;
     }
     const hook_rate = lifeImp   > 0 ? Math.round(lifePlays / lifeImp   * 1000) / 10 : null; // % w/ 1 dp
     const hold_rate = lifePlays > 0 ? Math.round(lifeThru  / lifePlays * 1000) / 10 : null; // % w/ 1 dp
+    // Lifetime NET conversion % (all-time paid_leads / leads) — used on the Scaled tab, where metrics are all-time
+    const conv_life_val = c.totalLeads > 0 ? Math.round(lifePaid / c.totalLeads * 1000) / 10 : null;
 
     creatives.push({
       key, ad_name: c.adName, go_live: fmtDate(goLive), age, theme, dh_phase,
       paused_from, cpl_val, cpl_tag, cost_d3_val, cost_d3_tag,
-      cost_d7_val, cost_d7_tag, roas_val, roas_tag, conv_val, conv_elig, hook_rate, hold_rate,
+      cost_d7_val, cost_d7_tag, roas_val, roas_tag, conv_val, conv_elig, conv_life_val, hook_rate, hold_rate,
       sc_cpl_val, sc_cpl_tag, sc_d3_val, sc_d3_tag, sc_d7_val, sc_d7_tag, sc_roas_val, sc_roas_tag,
       sc_health_score,
       total_spend, total_leads, active_days, is_ai, health_score, confidence, action,
