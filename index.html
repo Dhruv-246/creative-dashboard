@@ -2254,7 +2254,7 @@ document.addEventListener('keydown', e => {
 function downloadCSV(tab) {
   const configs = {
     all: {
-      headers: ['Status','Creative','Theme','Age','Score','Confidence','Action','CPL Tag','CPL ₹','D3','D7','ROAS','CTR %','CPC ₹','CPM ₹','Conv %','Spend'],
+      headers: ['Status','Creative','Theme','Age','Score','Confidence','Action','CPL Tag','CPL ₹','D3','D7','ROAS','CTR %','CPC ₹','CPM ₹','Conv %','Hook %','Hold %','Spend'],
       getData: () => getAll(),
       row: c => [
         c.paused_from ? 'Paused' : 'Active',
@@ -2262,6 +2262,7 @@ function downloadCSV(tab) {
         c.health_score, c.confidence, c.action,
         c.cpl_tag, c.cpl_val ?? '', c.cost_d3_tag, c.cost_d7_tag, c.roas_tag,
         c.life_ctr ?? '', c.life_cpc ?? '', c.life_cpm ?? '', c.conv_val ?? '',
+        c.hook_rate ?? '', c.hold_rate ?? '',
         c.total_spend
       ]
     },
