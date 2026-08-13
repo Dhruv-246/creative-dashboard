@@ -43,6 +43,12 @@ body{background:var(--bg);color:var(--text);font-family:'Manrope',sans-serif;fon
 .note-btn.has-note{background:rgba(91,156,246,.15);border:1px solid var(--bborder);color:var(--blue)}
 .note-btn.has-note::after{content:'✎';position:absolute;top:-5px;right:-5px;width:14px;height:14px;background:var(--blue);border-radius:50%;font-size:8px;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
 
+/* ── DRAG REORDER COLUMNS ── */
+th[draggable="true"]{cursor:grab;user-select:none;position:relative}
+th[draggable="true"]:active{cursor:grabbing}
+th.col-drag-over{border-left:2px solid var(--blue)!important;background:rgba(91,156,246,.08)}
+th.col-dragging{opacity:.4}
+
 /* ── PROFILE ── */
 #profile-wrap{position:relative}
 #profile-btn{width:32px;height:32px;border-radius:50%;background:var(--bbg);border:1px solid var(--bborder);color:var(--blue);font-size:13px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:'Manrope',sans-serif;transition:all .15s}
@@ -518,32 +524,12 @@ body{background:var(--bg);color:var(--text);font-family:'Manrope',sans-serif;fon
     </div>
     <span class="cnt" id="all-cnt"></span>
     <button class="fi" id="allBtnNotes" onclick="toggleNotesFilter('all')" title="Show only creatives with notes">📝 Has Notes</button>
-    <button class="fi" style="margin-left:auto" onclick="downloadCSV('all')">⬇ Download CSV</button>
+    <button class="fi" style="margin-left:auto" onclick="resetAllColOrder()" title="Reset column order to default">↺ Reset Columns</button>
+    <button class="fi" onclick="downloadCSV('all')">⬇ Download CSV</button>
   </div>
   <div class="tbl-wrap">
     <table class="dtbl">
-      <thead><tr>
-        <th onclick="sortA('paused_from')">Status</th>
-        <th onclick="sortA('key')">Creative</th>
-        <th onclick="sortA('theme')">Theme</th>
-        <th onclick="sortA('age')">Age</th>
-        <th onclick="sortA('health_score')" class="srt">Score</th>
-        <th>Confidence</th>
-        <th onclick="sortA('action')">Action</th>
-        <th onclick="sortA('cpl_val')">CPL ₹</th>
-        <th onclick="sortA('cpl_tag')">CPL Tag</th>
-        <th onclick="sortA('cost_d3_tag')">D3</th>
-        <th onclick="sortA('cost_d7_tag')">D7</th>
-        <th onclick="sortA('roas_tag')">ROAS</th>
-        <th onclick="sortA('life_ctr')">CTR %</th>
-        <th onclick="sortA('life_cpc')">CPC ₹</th>
-        <th onclick="sortA('life_cpm')">CPM ₹</th>
-        <th onclick="sortA('conv_val')">Conv %</th>
-        <th onclick="sortA('hook_rate')">Hook %</th>
-        <th onclick="sortA('hold_rate')">Hold %</th>
-        <th onclick="sortA('total_spend')">Spend</th>
-        <th>Notes</th>
-      </tr></thead>
+      <thead id="allHead"></thead>
       <tbody id="allBody"></tbody>
     </table>
     <div class="pag" id="allPag"></div>
@@ -1046,6 +1032,45 @@ function toggleStatus(val, btn){
   renderAll();
 }
 
+// ── ALL CREATIVES COLUMN CONFIG (drag-reorder) ──
+const ALL_COL_DEFS = [
+  {id:'status',label:'Status',sort:'paused_from',td:c=>`<td>${c.paused_from?'<span class="tag tpause">⏸ Paused</span>':'<span class="tag" style="background:var(--gbg);color:var(--green);border:1px solid var(--gborder)">● Active</span>'}</td>`},
+  {id:'creative',label:'Creative',sort:'key',td:c=>`<td class="nm">${nameCell(c)}</td>`},
+  {id:'theme',label:'Theme',sort:'theme',td:c=>`<td>${themeH(c.theme,c.theme==='Date Hook')}</td>`},
+  {id:'age',label:'Age',sort:'age',td:c=>`<td style="font-family:'IBM Plex Mono'">${c.age}d</td>`},
+  {id:'score',label:'Score',sort:'health_score',td:c=>`<td>${scorePill(c.health_score)}</td>`},
+  {id:'confidence',label:'Confidence',sort:null,td:c=>`<td style="display:flex;align-items:center;gap:4px;padding-top:10px">${confH(c.confidence)}</td>`},
+  {id:'action',label:'Action',sort:'action',td:c=>`<td>${actionH(c.action)}</td>`},
+  {id:'cpl_val',label:'CPL ₹',sort:'cpl_val',td:c=>`<td class="nr" style="color:var(--text);font-weight:600">${c.cpl_val!=null?'₹'+c.cpl_val:'—'}</td>`},
+  {id:'cpl_tag',label:'CPL Tag',sort:'cpl_tag',td:c=>`<td>${tagH(c.cpl_tag)}</td>`},
+  {id:'d3',label:'D3',sort:'cost_d3_tag',td:c=>`<td>${tagH(c.cost_d3_tag)}</td>`},
+  {id:'d7',label:'D7',sort:'cost_d7_tag',td:c=>`<td>${tagH(c.cost_d7_tag)}</td>`},
+  {id:'roas',label:'ROAS',sort:'roas_tag',td:c=>`<td>${tagH(c.roas_tag)}</td>`},
+  {id:'ctr',label:'CTR %',sort:'life_ctr',td:c=>`<td class="nr" style="color:var(--text)">${c.life_ctr!=null?c.life_ctr.toFixed(2)+'%':'—'}</td>`},
+  {id:'cpc',label:'CPC ₹',sort:'life_cpc',td:c=>`<td class="nr" style="color:var(--text)">${c.life_cpc!=null?'₹'+c.life_cpc.toFixed(2):'—'}</td>`},
+  {id:'cpm',label:'CPM ₹',sort:'life_cpm',td:c=>`<td class="nr" style="color:var(--text)">${c.life_cpm!=null?'₹'+c.life_cpm.toFixed(2):'—'}</td>`},
+  {id:'conv',label:'Conv %',sort:'conv_val',td:c=>`<td class="nr" style="color:var(--text)">${!c.conv_elig?'':c.conv_val!=null?c.conv_val.toFixed(1)+'%':'—'}</td>`},
+  {id:'hook',label:'Hook %',sort:'hook_rate',td:c=>`<td class="nr" style="color:var(--text)">${c.hook_rate!=null?c.hook_rate.toFixed(1)+'%':'—'}</td>`},
+  {id:'hold',label:'Hold %',sort:'hold_rate',td:c=>`<td class="nr" style="color:var(--text)">${c.hold_rate!=null?c.hold_rate.toFixed(1)+'%':'—'}</td>`},
+  {id:'spend',label:'Spend',sort:'total_spend',td:c=>`<td class="nr">${spendH(c.total_spend)}</td>`},
+  {id:'notes',label:'Notes',sort:null,td:c=>`<td style="text-align:center">${noteBtn(c.key)}</td>`},
+];
+let allColOrder = null;
+function loadAllColOrder(){
+  try{const s=JSON.parse(localStorage.getItem('allColOrder'));if(Array.isArray(s)){const known=new Set(ALL_COL_DEFS.map(d=>d.id));const o=s.filter(id=>known.has(id));ALL_COL_DEFS.forEach(d=>{if(!o.includes(d.id))o.push(d.id)});return o;}}catch(e){}
+  return ALL_COL_DEFS.map(d=>d.id);
+}
+function getOrderedAllCols(){if(!allColOrder)allColOrder=loadAllColOrder();return allColOrder.map(id=>ALL_COL_DEFS.find(d=>d.id===id)).filter(Boolean);}
+function saveAllColOrder(){localStorage.setItem('allColOrder',JSON.stringify(allColOrder));}
+function resetAllColOrder(){allColOrder=ALL_COL_DEFS.map(d=>d.id);localStorage.removeItem('allColOrder');renderAll();}
+
+let _dragColId=null;
+function colDragStart(e){_dragColId=e.target.dataset.col;e.target.classList.add('col-dragging');e.dataTransfer.effectAllowed='move';}
+function colDragOver(e){e.preventDefault();e.dataTransfer.dropEffect='move';const th=e.target.closest('th');if(th&&th.dataset.col!==_dragColId)th.classList.add('col-drag-over');}
+function colDragLeave(e){const th=e.target.closest('th');if(th)th.classList.remove('col-drag-over');}
+function colDrop(e){e.preventDefault();const th=e.target.closest('th');if(th)th.classList.remove('col-drag-over');const target=th?.dataset?.col;if(!target||!_dragColId||target===_dragColId)return;const fi=allColOrder.indexOf(_dragColId),ti=allColOrder.indexOf(target);if(fi<0||ti<0)return;allColOrder.splice(fi,1);allColOrder.splice(ti,0,_dragColId);saveAllColOrder();renderAll();}
+function colDragEnd(e){e.target.classList.remove('col-dragging');document.querySelectorAll('#allHead th').forEach(th=>th.classList.remove('col-drag-over'));}
+
 function getAll(){
   let r=[...C];
   if(allS.q) r=r.filter(c=>matchesSearch(c,allS.q));
@@ -1062,28 +1087,13 @@ function renderAll(){
   const rows=getAll();const s=allS;
   const pages=Math.max(1,Math.ceil(rows.length/PS));s.p=Math.min(s.p,pages);
   document.getElementById('all-cnt').textContent=rows.length+' creatives';
-  document.getElementById('allBody').innerHTML=rows.slice((s.p-1)*PS,s.p*PS).map(c=>`<tr>
-    <td>${c.paused_from ? `<span class="tag tpause">⏸ Paused</span>` : `<span class="tag" style="background:var(--gbg);color:var(--green);border:1px solid var(--gborder)">● Active</span>`}</td>
-    <td class="nm">${nameCell(c)}</td>
-    <td>${themeH(c.theme,c.theme==='Date Hook')}</td>
-    <td style="font-family:'IBM Plex Mono'">${c.age}d</td>
-    <td>${scorePill(c.health_score)}</td>
-    <td style="display:flex;align-items:center;gap:4px;padding-top:10px">${confH(c.confidence)}</td>
-    <td>${actionH(c.action)}</td>
-    <td class="nr" style="color:var(--text);font-weight:600">${c.cpl_val!=null?'₹'+c.cpl_val:'—'}</td>
-    <td>${tagH(c.cpl_tag)}</td>
-    <td>${tagH(c.cost_d3_tag)}</td>
-    <td>${tagH(c.cost_d7_tag)}</td>
-    <td>${tagH(c.roas_tag)}</td>
-    <td class="nr" style="color:var(--text)">${c.life_ctr!=null?c.life_ctr.toFixed(2)+'%':'—'}</td>
-    <td class="nr" style="color:var(--text)">${c.life_cpc!=null?'₹'+c.life_cpc.toFixed(2):'—'}</td>
-    <td class="nr" style="color:var(--text)">${c.life_cpm!=null?'₹'+c.life_cpm.toFixed(2):'—'}</td>
-    <td class="nr" style="color:var(--text)">${!c.conv_elig?'':c.conv_val!=null?c.conv_val.toFixed(1)+'%':'—'}</td>
-    <td class="nr" style="color:var(--text)">${c.hook_rate!=null?c.hook_rate.toFixed(1)+'%':'—'}</td>
-    <td class="nr" style="color:var(--text)">${c.hold_rate!=null?c.hold_rate.toFixed(1)+'%':'—'}</td>
-    <td class="nr">${spendH(c.total_spend)}</td>
-    <td style="text-align:center">${noteBtn(c.key)}</td>
-  </tr>`).join('')||`<tr><td colspan="20" class="empty">No creatives match</td></tr>`;
+  const cols=getOrderedAllCols();
+  document.getElementById('allHead').innerHTML=`<tr>${cols.map(col=>
+    `<th draggable="true" data-col="${col.id}" ${col.sort?`onclick="sortA('${col.sort}')"`:''} ondragstart="colDragStart(event)" ondragover="colDragOver(event)" ondragleave="colDragLeave(event)" ondrop="colDrop(event)" ondragend="colDragEnd(event)">${col.label}</th>`
+  ).join('')}</tr>`;
+  document.getElementById('allBody').innerHTML=rows.slice((s.p-1)*PS,s.p*PS).map(c=>
+    `<tr>${cols.map(col=>col.td(c)).join('')}</tr>`
+  ).join('')||`<tr><td colspan="${cols.length}" class="empty">No creatives match</td></tr>`;
   pag('allPag',s,pages,renderAll);
 }
 function sortA(col){if(allS.sort===col)allS.dir*=-1;else{allS.sort=col;allS.dir=-1;}allS.p=1;renderAll();}
