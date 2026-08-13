@@ -535,6 +535,9 @@ body{background:var(--bg);color:var(--text);font-family:'Manrope',sans-serif;fon
         <th onclick="sortA('cost_d3_tag')">D3</th>
         <th onclick="sortA('cost_d7_tag')">D7</th>
         <th onclick="sortA('roas_tag')">ROAS</th>
+        <th onclick="sortA('life_ctr')">CTR %</th>
+        <th onclick="sortA('life_cpc')">CPC ₹</th>
+        <th onclick="sortA('life_cpm')">CPM ₹</th>
         <th onclick="sortA('conv_val')">Conv %</th>
         <th onclick="sortA('hook_rate')">Hook %</th>
         <th onclick="sortA('hold_rate')">Hold %</th>
@@ -1072,12 +1075,15 @@ function renderAll(){
     <td>${tagH(c.cost_d3_tag)}</td>
     <td>${tagH(c.cost_d7_tag)}</td>
     <td>${tagH(c.roas_tag)}</td>
+    <td class="nr" style="color:var(--text)">${c.life_ctr!=null?c.life_ctr.toFixed(2)+'%':'—'}</td>
+    <td class="nr" style="color:var(--text)">${c.life_cpc!=null?'₹'+c.life_cpc.toFixed(2):'—'}</td>
+    <td class="nr" style="color:var(--text)">${c.life_cpm!=null?'₹'+c.life_cpm.toFixed(2):'—'}</td>
     <td class="nr" style="color:var(--text)">${!c.conv_elig?'':c.conv_val!=null?c.conv_val.toFixed(1)+'%':'—'}</td>
     <td class="nr" style="color:var(--text)">${c.hook_rate!=null?c.hook_rate.toFixed(1)+'%':'—'}</td>
     <td class="nr" style="color:var(--text)">${c.hold_rate!=null?c.hold_rate.toFixed(1)+'%':'—'}</td>
     <td class="nr">${spendH(c.total_spend)}</td>
     <td style="text-align:center">${noteBtn(c.key)}</td>
-  </tr>`).join('')||`<tr><td colspan="17" class="empty">No creatives match</td></tr>`;
+  </tr>`).join('')||`<tr><td colspan="20" class="empty">No creatives match</td></tr>`;
   pag('allPag',s,pages,renderAll);
 }
 function sortA(col){if(allS.sort===col)allS.dir*=-1;else{allS.sort=col;allS.dir=-1;}allS.p=1;renderAll();}
@@ -2235,13 +2241,14 @@ document.addEventListener('keydown', e => {
 function downloadCSV(tab) {
   const configs = {
     all: {
-      headers: ['Status','Creative','Theme','Age','Score','Confidence','Action','CPL Tag','CPL ₹','D3','D7','ROAS','Spend'],
+      headers: ['Status','Creative','Theme','Age','Score','Confidence','Action','CPL Tag','CPL ₹','D3','D7','ROAS','CTR %','CPC ₹','CPM ₹','Conv %','Spend'],
       getData: () => getAll(),
       row: c => [
         c.paused_from ? 'Paused' : 'Active',
         c.key, c.theme, c.age,
         c.health_score, c.confidence, c.action,
         c.cpl_tag, c.cpl_val ?? '', c.cost_d3_tag, c.cost_d7_tag, c.roas_tag,
+        c.life_ctr ?? '', c.life_cpc ?? '', c.life_cpm ?? '', c.conv_val ?? '',
         c.total_spend
       ]
     },
@@ -2638,6 +2645,7 @@ function processCSV(text) {
     const d3 = cleanNum(cols[idx['daily_attended_3_plus']]);
     const d7 = cleanNum(cols[idx['daily_attended_7_plus']]);
     // ── Meta ad metrics (optional new columns) ──
+    const clicks      = 'daily_clicks_total' in idx ? cleanNum(cols[idx['daily_clicks_total']]) : 0;
     const impressions = 'daily_impressions' in idx ? cleanNum(cols[idx['daily_impressions']]) : 0;
     const hookFrac    = 'hook_rate_%'       in idx ? parseRate(cols[idx['hook_rate_%']])       : 0;
     const holdFrac    = 'hold_rate_%'       in idx ? parseRate(cols[idx['hold_rate_%']])       : 0;
@@ -2657,13 +2665,14 @@ function processCSV(text) {
     if (spend > 0 && (!c.goLive || actDate < c.goLive)) c.goLive = actDate;
 
     const dk = fmtDate(actDate);
-    if (!c.days[dk]) c.days[dk] = {spend:0,leads:0,paid:0,revenue:0,d3:0,d7:0,impressions:0,plays3s:0,thru:0};
+    if (!c.days[dk]) c.days[dk] = {spend:0,leads:0,paid:0,revenue:0,d3:0,d7:0,clicks:0,impressions:0,plays3s:0,thru:0};
     c.days[dk].spend += spend;
     c.days[dk].leads += leads;
     c.days[dk].paid += paidLeads;
     c.days[dk].revenue += revenue;
     c.days[dk].d3 += d3;
     c.days[dk].d7 += d7;
+    c.days[dk].clicks += clicks;
     c.days[dk].impressions += impressions;
     c.days[dk].plays3s += plays3s;
     c.days[dk].thru += thru;
@@ -2928,8 +2937,9 @@ function processCSV(text) {
     }
 
     // ── Lifetime cumulative Hook / Hold (impression-weighted, NOT a simple average) ──
-    let lifeImp = 0, lifePlays = 0, lifeThru = 0, lifePaid = 0;
+    let lifeImp = 0, lifePlays = 0, lifeThru = 0, lifePaid = 0, lifeClicks = 0;
     for (const v of Object.values(c.days)) {
+      lifeClicks += v.clicks || 0;
       lifeImp   += v.impressions || 0;
       lifePlays += v.plays3s || 0;
       lifeThru  += v.thru || 0;
@@ -2939,11 +2949,15 @@ function processCSV(text) {
     const hold_rate = lifePlays > 0 ? Math.round(lifeThru  / lifePlays * 1000) / 10 : null; // % w/ 1 dp
     // Lifetime NET conversion % (all-time paid_leads / leads) — used on the Scaled tab, where metrics are all-time
     const conv_life_val = c.totalLeads > 0 ? Math.round(lifePaid / c.totalLeads * 1000) / 10 : null;
+    const life_ctr = lifeImp > 0 ? Math.round(lifeClicks / lifeImp * 10000) / 100 : null;
+    const life_cpc = lifeClicks > 0 ? Math.round(total_spend / lifeClicks * 100) / 100 : null;
+    const life_cpm = lifeImp > 0 ? Math.round(total_spend / lifeImp * 1000 * 100) / 100 : null;
 
     creatives.push({
       key, ad_name: c.adName, go_live: fmtDate(goLive), age, theme, dh_phase,
       paused_from, cpl_val, cpl_tag, cost_d3_val, cost_d3_tag,
-      cost_d7_val, cost_d7_tag, roas_val, roas_tag, conv_val, conv_elig, conv_life_val, hook_rate, hold_rate,
+      cost_d7_val, cost_d7_tag, roas_val, roas_tag, conv_val, conv_elig, conv_life_val,
+      life_ctr, life_cpc, life_cpm, hook_rate, hold_rate,
       sc_cpl_val, sc_cpl_tag, sc_d3_val, sc_d3_tag, sc_d7_val, sc_d7_tag, sc_roas_val, sc_roas_tag,
       sc_health_score,
       total_spend, total_leads, active_days, is_ai, health_score, confidence, action,
@@ -2997,6 +3011,7 @@ function processCSV(text) {
       revenue: Math.round(v.revenue * 100) / 100,
       d3: Math.round(v.d3),
       d7: Math.round(v.d7),
+      clicks: Math.round(v.clicks || 0),
       impressions: Math.round(v.impressions || 0),
       plays3s: Math.round((v.plays3s || 0) * 100) / 100,
       thru: Math.round((v.thru || 0) * 100) / 100,
