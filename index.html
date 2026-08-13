@@ -1915,10 +1915,10 @@ function openPopup(key) {
         // ISO week number
         const jan4 = new Date(Date.UTC(monDt.getUTCFullYear(),0,4));
         const wNum = Math.ceil(((monDt-jan4)/86400000+((jan4.getUTCDay()+6)%7)+1)/7);
-        if (!weekMap.has(wk)) weekMap.set(wk, {week:wk, wEnd:wkEnd, wNum, spend:0, leads:0, paid:0, d3:0, d7:0, revenue:0, days:0, imp:0, plays3s:0, thru:0});
+        if (!weekMap.has(wk)) weekMap.set(wk, {week:wk, wEnd:wkEnd, wNum, spend:0, leads:0, paid:0, d3:0, d7:0, revenue:0, days:0, clicks:0, imp:0, plays3s:0, thru:0});
         const r = weekMap.get(wk);
         r.spend += d.spend; r.leads += d.leads; r.d3 += (d.d3||0); r.d7 += (d.d7||0); r.revenue += (d.revenue||0); r.days++;
-        r.imp += (d.impressions||0); r.plays3s += (d.plays3s||0); r.thru += (d.thru||0);
+        r.clicks += (d.clicks||0); r.imp += (d.impressions||0); r.plays3s += (d.plays3s||0); r.thru += (d.thru||0);
         r.paid += (d.paid||0);
       });
       const weeks = [...weekMap.values()].sort((a,b)=>a.week.localeCompare(b.week));
@@ -1927,14 +1927,18 @@ function openPopup(key) {
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <div class="popup-daily-title" style="margin-bottom:0">Raw Data</div>
           <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:5px;overflow:hidden">
-            <button id="pdt-daily-btn" onclick="pdtSwitch('daily')" class="pdt-tab pdt-tab-on">Daily</button>
-            <button id="pdt-weekly-btn" onclick="pdtSwitch('weekly')" class="pdt-tab pdt-tab-off">Weekly</button>
+            <button id="pdt-daily-btn" onclick="pdtSwitch('daily')" class="pdt-tab pdt-tab-off">Daily</button>
+            <button id="pdt-weekly-btn" onclick="pdtSwitch('weekly')" class="pdt-tab pdt-tab-on">Weekly</button>
           </div>
         </div>
-        <div id="pdt-daily-view">
+        <div id="pdt-daily-view" style="display:none">
           <table class="pdt">
-            <thead><tr><th>Date</th><th>Spend ₹</th><th>Leads</th><th>CPL ₹</th><th>D3+</th><th>D7+</th><th>Revenue ₹</th></tr></thead>
-            <tbody>${daily.map(d=>`<tr>
+            <thead><tr><th>Date</th><th>Spend ₹</th><th>Leads</th><th>CPL ₹</th><th>D3+</th><th>D7+</th><th>Revenue ₹</th><th>CTR %</th><th>CPC ₹</th><th>CPM ₹</th></tr></thead>
+            <tbody>${daily.map(d=>{
+              const _ctr=d.impressions>0?(d.clicks/d.impressions*100):null;
+              const _cpc=d.clicks>0?(d.spend/d.clicks):null;
+              const _cpm=d.impressions>0?(d.spend/d.impressions*1000):null;
+              return `<tr>
               <td>${d.date}</td>
               <td>${d.spend>0?'₹'+d.spend.toFixed(0):'—'}</td>
               <td>${d.leads>0?d.leads:'—'}</td>
@@ -1942,12 +1946,15 @@ function openPopup(key) {
               <td>${d.d3>0?d.d3:'—'}</td>
               <td>${d.d7>0?d.d7:'—'}</td>
               <td>${d.revenue>0?'₹'+d.revenue.toFixed(0):'—'}</td>
-            </tr>`).join('')}</tbody>
+              <td>${_ctr!=null?_ctr.toFixed(2)+'%':'—'}</td>
+              <td>${_cpc!=null?'₹'+_cpc.toFixed(2):'—'}</td>
+              <td>${_cpm!=null?'₹'+_cpm.toFixed(2):'—'}</td>
+            </tr>`}).join('')}</tbody>
           </table>
         </div>
-        <div id="pdt-weekly-view" style="display:none">
+        <div id="pdt-weekly-view">
           <table class="pdt">
-            <thead><tr><th>Week</th><th>Days</th><th>Spend ₹</th><th>Leads</th><th>CPL ₹</th><th>D3+</th><th>D7+</th><th>D3%</th><th>D7%</th><th>Cost D3</th><th>Cost D7</th><th>Revenue ₹</th><th>ROAS</th><th>Conv %</th><th>Hook %</th><th>Hold %</th></tr></thead>
+            <thead><tr><th>Week</th><th>Days</th><th>Spend ₹</th><th>Leads</th><th>CPL ₹</th><th>D3+</th><th>D7+</th><th>D3%</th><th>D7%</th><th>Cost D3</th><th>Cost D7</th><th>Revenue ₹</th><th>ROAS</th><th>CTR %</th><th>CPC ₹</th><th>CPM ₹</th><th>Conv %</th><th>Hook %</th><th>Hold %</th></tr></thead>
             <tbody>${weeks.map(w => {
               const cpl   = w.leads>0 ? (w.spend/w.leads).toFixed(2) : null;
               const d3pct = w.leads>0 ? Math.round(w.d3/w.leads*100) : null;
@@ -1955,9 +1962,12 @@ function openPopup(key) {
               const cd3   = w.d3>0   ? Math.round(w.spend/w.d3) : null;
               const cd7   = w.d7>0   ? Math.round(w.spend/w.d7) : null;
               const roas  = w.spend>0 ? (w.revenue/w.spend).toFixed(2) : null;
-              const convW = w.leads>0   ? (w.paid/w.leads*100)    : null; // weekly conversion % (paid/free leads)
-              const hookW = w.imp>0     ? (w.plays3s/w.imp*100)  : null; // weekly weighted hook %
-              const holdW = w.plays3s>0 ? (w.thru/w.plays3s*100) : null; // weekly weighted hold %
+              const ctrW  = w.imp>0     ? (w.clicks/w.imp*100)    : null;
+              const cpcW  = w.clicks>0  ? (w.spend/w.clicks)     : null;
+              const cpmW  = w.imp>0     ? (w.spend/w.imp*1000)   : null;
+              const convW = w.leads>0   ? (w.paid/w.leads*100)    : null;
+              const hookW = w.imp>0     ? (w.plays3s/w.imp*100)  : null;
+              const holdW = w.plays3s>0 ? (w.thru/w.plays3s*100) : null;
               return `<tr>
               <td style="white-space:nowrap"><span style="color:var(--text2);font-size:10px">W${w.wNum}</span> <span style="color:var(--text3);font-size:10px">(${fmtD(w.week)}–${fmtD(w.wEnd)})</span></td>
               <td style="color:var(--text3)">${w.days}</td>
@@ -1972,6 +1982,9 @@ function openPopup(key) {
               <td>${cd7!=null?'₹'+cd7:'—'}</td>
               <td>${w.revenue>0?'₹'+w.revenue.toFixed(0):'—'}</td>
               <td>${roas&&w.revenue>0?roas+'×':'—'}</td>
+              <td>${ctrW!=null?ctrW.toFixed(2)+'%':'—'}</td>
+              <td>${cpcW!=null?'₹'+cpcW.toFixed(2):'—'}</td>
+              <td>${cpmW!=null?'₹'+cpmW.toFixed(2):'—'}</td>
               <td>${convW!=null?convW.toFixed(1)+'%':'—'}</td>
               <td>${hookW!=null?hookW.toFixed(1)+'%':'—'}</td>
               <td>${holdW!=null?holdW.toFixed(1)+'%':'—'}</td>
