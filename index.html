@@ -714,6 +714,11 @@ th.col-dragging{opacity:.4}
       <th onclick="sortSc('sc_d7_val')">D7 ₹</th><th>D7 Tag</th>
       <th onclick="sortSc('sc_roas_val')">ROAS</th><th>ROAS Tag</th>
       <th onclick="sortSc('sc_health_score')">Score</th>
+      <th onclick="sortSc('life_ctr')">CTR %</th>
+      <th onclick="sortSc('life_cpc')">CPC ₹</th>
+      <th onclick="sortSc('life_cpm')">CPM ₹</th>
+      <th onclick="sortSc('hook_rate')">Hook %</th>
+      <th onclick="sortSc('hold_rate')">Hold %</th>
       <th onclick="sortSc('total_spend')">Spend</th>
       <th onclick="sortSc('total_leads')">Leads</th>
       <th>Notes</th>
@@ -1519,10 +1524,15 @@ function renderScaled(){
     <td class="nr">${c.sc_roas_val!=null?c.sc_roas_val+'×':'—'}</td>
     <td>${tagH(c.sc_roas_tag)}</td>
     <td class="nr" style="font-weight:700;color:${c.sc_health_score>=67?'var(--green)':c.sc_health_score>=34?'var(--yellow)':'var(--red)'}">${c.sc_health_score!=null?c.sc_health_score:'—'}</td>
+    <td class="nr" style="color:var(--text)">${c.life_ctr!=null?c.life_ctr.toFixed(2)+'%':'—'}</td>
+    <td class="nr" style="color:var(--text)">${c.life_cpc!=null?'₹'+c.life_cpc.toFixed(2):'—'}</td>
+    <td class="nr" style="color:var(--text)">${c.life_cpm!=null?'₹'+c.life_cpm.toFixed(2):'—'}</td>
+    <td class="nr" style="color:var(--text)">${c.hook_rate!=null?c.hook_rate.toFixed(1)+'%':'—'}</td>
+    <td class="nr" style="color:var(--text)">${c.hold_rate!=null?c.hold_rate.toFixed(1)+'%':'—'}</td>
     <td class="nr">${spendH(c.total_spend)}</td>
     <td class="nr">${c.total_leads.toLocaleString('en-IN')}</td>
     <td style="text-align:center">${noteBtn(c.key)}</td>
-  </tr>`).join('')||`<tr><td colspan="18" class="empty">No creatives with age &gt; 28 days</td></tr>`;
+  </tr>`).join('')||`<tr><td colspan="23" class="empty">No creatives with age &gt; 28 days</td></tr>`;
   pag('scPag',s,pages,renderScaled);
 }
 function sortSc(col){if(scS.sort===col)scS.dir*=-1;else{scS.sort=col;scS.dir=-1;}scS.p=1;renderScaled();}
@@ -2307,7 +2317,7 @@ function downloadCSV(tab) {
       ]
     },
     sc: {
-      headers: ['Status','Creative','Theme','Active Days','Calendar Age','Days Past 28','CPL ₹','CPL Tag','D3 ₹','D3 Tag','D7 ₹','D7 Tag','ROAS','ROAS Tag','Spend','Leads'],
+      headers: ['Status','Creative','Theme','Active Days','Calendar Age','Days Past 28','CPL ₹','CPL Tag','D3 ₹','D3 Tag','D7 ₹','D7 Tag','ROAS','ROAS Tag','Score','CTR %','CPC ₹','CPM ₹','Hook %','Hold %','Spend','Leads'],
       getData: () => getScaled(),
       row: c => [
         c.paused_from ? 'Paused' : 'Active',
@@ -2316,6 +2326,9 @@ function downloadCSV(tab) {
         c.sc_d3_val ?? '', c.sc_d3_tag,
         c.sc_d7_val ?? '', c.sc_d7_tag,
         c.sc_roas_val ?? '', c.sc_roas_tag,
+        c.sc_health_score ?? '',
+        c.life_ctr ?? '', c.life_cpc ?? '', c.life_cpm ?? '',
+        c.hook_rate ?? '', c.hold_rate ?? '',
         c.total_spend, c.total_leads
       ]
     }
