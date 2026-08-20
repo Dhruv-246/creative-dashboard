@@ -50,12 +50,19 @@ th.col-drag-over{border-left:2px solid var(--blue)!important;background:rgba(91,
 th.col-dragging{opacity:.4}
 
 /* ── THEME EDITOR ── */
-#theme-editor{position:fixed;z-index:9999;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.5);display:none;overflow:hidden;min-width:170px}
+#theme-editor{position:fixed;z-index:9999;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.5);display:none;overflow:hidden;min-width:200px}
 #theme-editor.open{display:block}
 .te-item{padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .15s;color:var(--text2)}
 .te-item:hover{background:var(--bg3);color:var(--text)}
 .te-item.te-active{background:var(--bbg);color:var(--blue)}
 .te-hdr{padding:8px 14px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);font-family:'IBM Plex Mono',monospace;border-bottom:1px solid var(--border)}
+.te-divider{border:none;border-top:1px solid var(--border);margin:0}
+.te-input-wrap{padding:8px 12px;display:flex;gap:6px}
+.te-input{flex:1;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--rs);padding:7px 10px;color:var(--text);font-size:12px;font-family:'Manrope',sans-serif;outline:none;transition:border .15s}
+.te-input:focus{border-color:var(--blue)}
+.te-input::placeholder{color:var(--text3)}
+.te-save{padding:7px 12px;background:var(--blue);border:none;border-radius:var(--rs);color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:'Manrope',sans-serif;white-space:nowrap}
+.te-save:hover{opacity:.85}
 .theme-editable{cursor:pointer}
 .theme-editable:hover{opacity:.8;outline:1px dashed var(--border2);outline-offset:2px;border-radius:4px}
 
@@ -1292,7 +1299,8 @@ function scGlobalPick(theme, item) {
   // Update button label
   const lbl = document.getElementById('scGlobalLbl');
   const btn = document.getElementById('scGlobalBtn');
-  if (scSelectedThemes.size === 0 || scSelectedThemes.size === 5) { lbl.textContent = 'All'; btn.classList.remove('has-sel'); }
+  const totalThemes = getAllThemes().length;
+  if (scSelectedThemes.size === 0 || scSelectedThemes.size === totalThemes) { lbl.textContent = 'All'; btn.classList.remove('has-sel'); }
   else if (scSelectedThemes.size === 1) { lbl.textContent = [...scSelectedThemes][0].split(' ')[0]; btn.classList.add('has-sel'); }
   else { lbl.textContent = scSelectedThemes.size + ' selected'; btn.classList.add('has-sel'); }
 
@@ -2370,14 +2378,48 @@ const SHEETS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vS4iB0cO
 const THEME_OVERRIDE_URL = 'https://script.google.com/macros/s/AKfycbzMGn6c-hEiCUh-1MDWKujwSX8yP8Qz_bXa3bB1OFwfgChzXI3921HcZRyL27xm1zw/exec';
 
 // ── THEME OVERRIDES ──
-const THEME_LIST = [
-  {id:'Date Hook', icon:'📅', label:'Date Hook'},
-  {id:'Problem Statement', icon:'🩺', label:'Problem Stmt'},
-  {id:'Generic', icon:'💬', label:'Generic'},
-  {id:'Social Proof', icon:'⭐', label:'Social Proof'},
-  {id:'AI Creative', icon:'🤖', label:'AI Creative'},
-];
+const BASE_THEMES = ['Date Hook','Problem Statement','Generic','Social Proof','AI Creative'];
+const THEME_ICONS = {'Date Hook':'📅','Problem Statement':'🩺','Generic':'💬','Social Proof':'⭐','AI Creative':'🤖'};
 let themeOverrides = {};
+
+function getAllThemes() {
+  const set = new Set(BASE_THEMES);
+  C.forEach(c => { if(c.theme) set.add(c.theme); });
+  return [...set];
+}
+
+function themeIcon(t) { return THEME_ICONS[t] || '🏷'; }
+
+function rebuildThemeFilters() {
+  const themes = getAllThemes();
+  const MENUS = [
+    {menuId:'allThemeMenu', tab:'all'},
+    {menuId:'cplThemeMenu', tab:'cpl'},
+    {menuId:'d3ThemeMenu',  tab:'d3'},
+    {menuId:'roThemeMenu',  tab:'ro'},
+    {menuId:'scThemeMenu',  tab:'sc'},
+  ];
+  for (const cfg of MENUS) {
+    const menu = document.getElementById(cfg.menuId);
+    if (!menu) continue;
+    const state = TAB_STATE_MAP[cfg.tab];
+    if (!state) continue;
+    menu.innerHTML = themes.map(t => {
+      const checked = state.themes.has(t);
+      return `<div class="theme-dd-item${checked?' checked':''}" onclick="toggleTabTheme('${cfg.tab}','${t.replace(/'/g,"\\'")}',this)"><input type="checkbox"${checked?' checked':''}>${themeIcon(t)} ${t}</div>`;
+    }).join('');
+  }
+  // Scorecard theme filter
+  const scGMenu = document.getElementById('scGlobalMenu');
+  if (scGMenu) {
+    const allSelected = scSelectedThemes.size === 0;
+    scGMenu.innerHTML = `<div class="theme-dd-item${allSelected?' checked':''}" onclick="scGlobalPick('',this)"><input type="checkbox"${allSelected?' checked':''}> All themes</div>` +
+      themes.map(t => {
+        const checked = scSelectedThemes.has(t);
+        return `<div class="theme-dd-item${checked?' checked':''}" onclick="scGlobalPick('${t.replace(/'/g,"\\'")}',this)"><input type="checkbox"${checked?' checked':''}>${themeIcon(t)} ${t}</div>`;
+      }).join('');
+  }
+}
 
 async function fetchThemeOverrides() {
   try {
@@ -2392,6 +2434,7 @@ async function fetchThemeOverrides() {
       }
     }
     if (changed) {
+      rebuildThemeFilters();
       renderAll(); renderCpl(); renderD3(); renderRo(); renderScaled();
       updateActionMenuOptions(); updateAllThemeLbl();
     }
@@ -2404,15 +2447,25 @@ function openThemeEditor(key, e) {
   _teKey = key;
   const c = C.find(x => x.key === key);
   if (!c) return;
+  const themes = getAllThemes();
   const el = document.getElementById('theme-editor');
   el.innerHTML = '<div class="te-hdr">Change Theme</div>' +
-    THEME_LIST.map(t =>
-      `<div class="te-item${t.id===c.theme?' te-active':''}" onclick="pickTheme('${t.id}')">${t.icon} ${t.label}</div>`
-    ).join('');
+    themes.map(t =>
+      `<div class="te-item${t===c.theme?' te-active':''}" onclick="pickTheme('${t.replace(/'/g,"\\'")}')">${themeIcon(t)} ${t}</div>`
+    ).join('') +
+    '<hr class="te-divider">' +
+    '<div class="te-input-wrap"><input class="te-input" id="teCustomInput" type="text" placeholder="New theme name…" onkeydown="if(event.key===\'Enter\'){pickCustomTheme();event.preventDefault()}"><button class="te-save" onclick="pickCustomTheme()">Add</button></div>';
   const rect = e.target.closest('td').getBoundingClientRect();
-  el.style.left = Math.min(rect.left, window.innerWidth - 200) + 'px';
-  el.style.top = Math.min(rect.bottom + 4, window.innerHeight - 250) + 'px';
+  el.style.left = Math.min(rect.left, window.innerWidth - 220) + 'px';
+  el.style.top = Math.min(rect.bottom + 4, window.innerHeight - 300) + 'px';
   el.classList.add('open');
+  setTimeout(() => document.getElementById('teCustomInput')?.focus(), 50);
+}
+
+function pickCustomTheme() {
+  const inp = document.getElementById('teCustomInput');
+  const val = (inp?.value || '').trim();
+  if (val) pickTheme(val);
 }
 
 async function pickTheme(theme) {
@@ -2423,6 +2476,7 @@ async function pickTheme(theme) {
   if (!c || c.theme === theme) return;
   const oldTheme = c.theme;
   c.theme = theme;
+  rebuildThemeFilters();
   renderAll(); renderCpl(); renderD3(); renderRo(); renderScaled();
   updateActionMenuOptions(); updateAllThemeLbl();
   const user = sessionStorage.getItem('user') || 'unknown';
@@ -2435,6 +2489,7 @@ async function pickTheme(theme) {
   } catch(e) {
     console.error('Theme save failed:', e);
     c.theme = oldTheme;
+    rebuildThemeFilters();
     renderAll();
   }
 }
@@ -2591,6 +2646,7 @@ function applyData(data) {
   updateActionMenuOptions();
   updateAllThemeLbl();
   populateMonthBtns();
+  rebuildThemeFilters();
   renderAll(); renderCpl(); renderD3(); renderRo(); renderScaled(); renderAlerts();
   document.getElementById('btnActive').classList.toggle('active', allS.status==='active');
   document.getElementById('btnPaused').classList.toggle('active', allS.status==='paused');
