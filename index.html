@@ -49,6 +49,16 @@ th[draggable="true"]:active{cursor:grabbing}
 th.col-drag-over{border-left:2px solid var(--blue)!important;background:rgba(91,156,246,.08)}
 th.col-dragging{opacity:.4}
 
+/* ── THEME EDITOR ── */
+#theme-editor{position:fixed;z-index:9999;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r);box-shadow:0 8px 24px rgba(0,0,0,.5);display:none;overflow:hidden;min-width:170px}
+#theme-editor.open{display:block}
+.te-item{padding:9px 14px;font-size:12px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .15s;color:var(--text2)}
+.te-item:hover{background:var(--bg3);color:var(--text)}
+.te-item.te-active{background:var(--bbg);color:var(--blue)}
+.te-hdr{padding:8px 14px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);font-family:'IBM Plex Mono',monospace;border-bottom:1px solid var(--border)}
+.theme-editable{cursor:pointer}
+.theme-editable:hover{opacity:.8;outline:1px dashed var(--border2);outline-offset:2px;border-radius:4px}
+
 /* ── PROFILE ── */
 #profile-wrap{position:relative}
 #profile-btn{width:32px;height:32px;border-radius:50%;background:var(--bbg);border:1px solid var(--bborder);color:var(--blue);font-size:13px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:'Manrope',sans-serif;transition:all .15s}
@@ -347,6 +357,11 @@ th.col-dragging{opacity:.4}
       <button class="notes-save" onclick="saveNote()">Save Note</button>
     </div>
   </div>
+</div>
+
+<!-- ── THEME EDITOR DROPDOWN ── -->
+<div id="theme-editor">
+  <div class="te-hdr">Change Theme</div>
 </div>
 
 <!-- ── LOGIN OVERLAY ── -->
@@ -1041,7 +1056,7 @@ function toggleStatus(val, btn){
 const ALL_COL_DEFS = [
   {id:'status',label:'Status',sort:'paused_from',td:c=>`<td>${c.paused_from?'<span class="tag tpause">⏸ Paused</span>':'<span class="tag" style="background:var(--gbg);color:var(--green);border:1px solid var(--gborder)">● Active</span>'}</td>`},
   {id:'creative',label:'Creative',sort:'key',td:c=>`<td class="nm">${nameCell(c)}</td>`},
-  {id:'theme',label:'Theme',sort:'theme',td:c=>`<td>${themeH(c.theme,c.theme==='Date Hook')}</td>`},
+  {id:'theme',label:'Theme',sort:'theme',td:c=>`<td class="theme-editable" ondblclick="openThemeEditor('${c.key.replace(/'/g,"\\'")}',event)">${themeH(c.theme,c.theme==='Date Hook')}</td>`},
   {id:'age',label:'Age',sort:'age',td:c=>`<td style="font-family:'IBM Plex Mono'">${c.age}d</td>`},
   {id:'score',label:'Score',sort:'health_score',td:c=>`<td>${scorePill(c.health_score)}</td>`},
   {id:'confidence',label:'Confidence',sort:null,td:c=>`<td style="display:flex;align-items:center;gap:4px;padding-top:10px">${confH(c.confidence)}</td>`},
@@ -2352,6 +2367,82 @@ function downloadCSV(tab) {
 
 // ── GOOGLE SHEETS LIVE SYNC ──
 const SHEETS_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vS4iB0cO0WkyITBkM_mxvNW2K_4CUXaqRSUrgHDXq5crTi-rQNhKHjKbjmB6mbYjpKW0vMSYMwCG7gO/pub?gid=0&single=true&output=csv';
+const THEME_OVERRIDE_URL = 'https://script.google.com/macros/s/AKfycbzMGn6c-hEiCUh-1MDWKujwSX8yP8Qz_bXa3bB1OFwfgChzXI3921HcZRyL27xm1zw/exec';
+
+// ── THEME OVERRIDES ──
+const THEME_LIST = [
+  {id:'Date Hook', icon:'📅', label:'Date Hook'},
+  {id:'Problem Statement', icon:'🩺', label:'Problem Stmt'},
+  {id:'Generic', icon:'💬', label:'Generic'},
+  {id:'Social Proof', icon:'⭐', label:'Social Proof'},
+  {id:'AI Creative', icon:'🤖', label:'AI Creative'},
+];
+let themeOverrides = {};
+
+async function fetchThemeOverrides() {
+  try {
+    const res = await fetch(THEME_OVERRIDE_URL + '?t=' + Date.now());
+    if (!res.ok) return;
+    themeOverrides = await res.json();
+    let changed = false;
+    for (const c of C) {
+      if (themeOverrides[c.key] && themeOverrides[c.key].theme !== c.theme) {
+        c.theme = themeOverrides[c.key].theme;
+        changed = true;
+      }
+    }
+    if (changed) {
+      renderAll(); renderCpl(); renderD3(); renderRo(); renderScaled();
+      updateActionMenuOptions(); updateAllThemeLbl();
+    }
+  } catch(e) { console.warn('Theme override fetch failed:', e); }
+}
+
+let _teKey = null;
+function openThemeEditor(key, e) {
+  e.stopPropagation();
+  _teKey = key;
+  const c = C.find(x => x.key === key);
+  if (!c) return;
+  const el = document.getElementById('theme-editor');
+  el.innerHTML = '<div class="te-hdr">Change Theme</div>' +
+    THEME_LIST.map(t =>
+      `<div class="te-item${t.id===c.theme?' te-active':''}" onclick="pickTheme('${t.id}')">${t.icon} ${t.label}</div>`
+    ).join('');
+  const rect = e.target.closest('td').getBoundingClientRect();
+  el.style.left = Math.min(rect.left, window.innerWidth - 200) + 'px';
+  el.style.top = Math.min(rect.bottom + 4, window.innerHeight - 250) + 'px';
+  el.classList.add('open');
+}
+
+async function pickTheme(theme) {
+  const el = document.getElementById('theme-editor');
+  el.classList.remove('open');
+  if (!_teKey) return;
+  const c = C.find(x => x.key === _teKey);
+  if (!c || c.theme === theme) return;
+  const oldTheme = c.theme;
+  c.theme = theme;
+  renderAll(); renderCpl(); renderD3(); renderRo(); renderScaled();
+  updateActionMenuOptions(); updateAllThemeLbl();
+  const user = sessionStorage.getItem('user') || 'unknown';
+  try {
+    await fetch(THEME_OVERRIDE_URL, {
+      method: 'POST', mode: 'no-cors',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({creative_key: _teKey, theme, updated_by: user})
+    });
+  } catch(e) {
+    console.error('Theme save failed:', e);
+    c.theme = oldTheme;
+    renderAll();
+  }
+}
+
+document.addEventListener('click', e => {
+  const el = document.getElementById('theme-editor');
+  if (el && !el.contains(e.target)) el.classList.remove('open');
+});
 
 let supplyWindow = 7;
 let supplyCustomFrom = null, supplyCustomTo = null;
@@ -2529,6 +2620,7 @@ async function loadFromGoogleSheets() {
     applyData(data);
     const now = new Date();
     const time = now.toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit'});
+    fetchThemeOverrides();
     status.textContent = `✓ Synced at ${time}`;
     status.style.color = 'var(--green)';
     status.style.fontWeight = '700';
