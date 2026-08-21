@@ -1070,6 +1070,7 @@ const ALL_COL_DEFS = [
   {id:'action',label:'Action',sort:'action',td:c=>`<td>${actionH(c.action)}</td>`},
   {id:'cpl_val',label:'CPL ₹',sort:'cpl_val',td:c=>`<td class="nr" style="color:var(--text);font-weight:600">${c.cpl_val!=null?'₹'+c.cpl_val:'—'}</td>`},
   {id:'cpl_tag',label:'CPL Tag',sort:'cpl_tag',td:c=>`<td>${tagH(c.cpl_tag)}</td>`},
+  {id:'cpl_21d',label:'CPL 21d',sort:'cpl_21d',td:c=>`<td class="nr" style="color:var(--text);font-weight:600">${c.cpl_21d!=null?'₹'+c.cpl_21d:'—'}</td>`},
   {id:'d3',label:'D3',sort:'cost_d3_tag',td:c=>`<td>${tagH(c.cost_d3_tag)}</td>`},
   {id:'d7',label:'D7',sort:'cost_d7_tag',td:c=>`<td>${tagH(c.cost_d7_tag)}</td>`},
   {id:'roas',label:'ROAS',sort:'roas_tag',td:c=>`<td>${tagH(c.roas_tag)}</td>`},
@@ -2297,13 +2298,13 @@ document.addEventListener('keydown', e => {
 function downloadCSV(tab) {
   const configs = {
     all: {
-      headers: ['Status','Creative','Theme','Age','Score','Confidence','Action','CPL Tag','CPL ₹','D3','D7','ROAS','CTR %','CPC ₹','CPM ₹','Conv %','Hook %','Hold %','Spend'],
+      headers: ['Status','Creative','Theme','Age','Score','Confidence','Action','CPL Tag','CPL ₹','CPL 21d','D3','D7','ROAS','CTR %','CPC ₹','CPM ₹','Conv %','Hook %','Hold %','Spend'],
       getData: () => getAll(),
       row: c => [
         c.paused_from ? 'Paused' : 'Active',
         c.key, c.theme, c.age,
         c.health_score, c.confidence, c.action,
-        c.cpl_tag, c.cpl_val ?? '', c.cost_d3_tag, c.cost_d7_tag, c.roas_tag,
+        c.cpl_tag, c.cpl_val ?? '', c.cpl_21d ?? '', c.cost_d3_tag, c.cost_d7_tag, c.roas_tag,
         c.life_ctr ?? '', c.life_cpc ?? '', c.life_cpm ?? '', c.conv_val ?? '',
         c.hook_rate ?? '', c.hold_rate ?? '',
         c.total_spend
@@ -3138,11 +3139,21 @@ function processCSV(text) {
     const life_cpc = lifeClicks > 0 ? Math.round(total_spend / lifeClicks * 100) / 100 : null;
     const life_cpm = lifeImp > 0 ? Math.round(total_spend / lifeImp * 1000 * 100) / 100 : null;
 
+    // Last 21 days CPL
+    let cpl_21d = null;
+    const dayEntries = Object.entries(c.days).sort((a,b) => a[0].localeCompare(b[0]));
+    if (dayEntries.length >= 7) {
+      const last21 = dayEntries.slice(-21);
+      const l21Spend = last21.reduce((s,[,v]) => s + v.spend, 0);
+      const l21Leads = last21.reduce((s,[,v]) => s + v.leads, 0);
+      cpl_21d = l21Leads > 0 ? Math.round(l21Spend / l21Leads * 100) / 100 : null;
+    }
+
     creatives.push({
       key, ad_name: c.adName, go_live: fmtDate(goLive), age, theme, dh_phase,
       paused_from, cpl_val, cpl_tag, cost_d3_val, cost_d3_tag,
       cost_d7_val, cost_d7_tag, roas_val, roas_tag, conv_val, conv_elig, conv_life_val,
-      life_ctr, life_cpc, life_cpm, hook_rate, hold_rate,
+      life_ctr, life_cpc, life_cpm, hook_rate, hold_rate, cpl_21d,
       sc_cpl_val, sc_cpl_tag, sc_d3_val, sc_d3_tag, sc_d7_val, sc_d7_tag, sc_roas_val, sc_roas_tag,
       sc_health_score,
       total_spend, total_leads, active_days, is_ai, health_score, confidence, action,
