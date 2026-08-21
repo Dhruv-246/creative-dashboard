@@ -3142,7 +3142,7 @@ function processCSV(text) {
     // Last 21 days CPL
     let cpl_21d = null;
     const dayEntries = Object.entries(c.days).sort((a,b) => a[0].localeCompare(b[0]));
-    if (dayEntries.length >= 7) {
+    if (active_days > 21 && dayEntries.length >= 7) {
       const last21 = dayEntries.slice(-21);
       const l21Spend = last21.reduce((s,[,v]) => s + v.spend, 0);
       const l21Leads = last21.reduce((s,[,v]) => s + v.leads, 0);
